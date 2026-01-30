@@ -142,10 +142,11 @@ config ARCH_PARAVIRT
 if ARCH_PARAVIRT
 
 config ARCH_PARAVIRT_SPINLOCKS
-
 	bool "Enable paravirtualized spinlocks"
 	default n
 	depends on ARCH_PARAVIRT
+	---help---
+		This enables support for optimizing spinlocks in virtual environments
 
 endif
 
