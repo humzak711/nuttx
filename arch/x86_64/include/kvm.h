@@ -40,15 +40,6 @@
 #define X86_64_KVM_HC_SEND_IPI		                  10
 #define X86_64_KVM_HC_SCHED_YIELD		                11
 
-/* Error codes */
-
-#define X86_64_KVM_ENOSYS                           1000
-#define X86_64_KVM_EFAULT                           14
-#define X86_64_KVM_EINVAL                           22
-#define X86_64_KVM_E2BIG                            7
-#define X86_64_KVM_EPERM                            1
-#define X86_64_KVM_EOPNOTSUPP                       95
-
 /* Cpuid leaves */
 
 #define X86_64_KVM_CPUID_SIGNATURE                  0x40000000
