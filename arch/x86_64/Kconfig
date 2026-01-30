@@ -133,6 +133,22 @@ config ARCH_HAVE_AVX512
 	bool
 	default n
 
+# Paravirtualization support
+
+config ARCH_PARAVIRT
+	bool
+	default n
+
+if ARCH_PARAVIRT
+
+config ARCH_PARAVIRT_SPINLOCKS
+
+	bool "Enable paravirtualized spinlocks"
+	default n
+	depends on ARCH_PARAVIRT
+
+endif
+
 source "arch/x86_64/src/common/Kconfig"
 
 if ARCH_INTEL64
