@@ -1,5 +1,5 @@
 /****************************************************************************
- * sched/sched/sched_resumescheduler.c
+ * include/nuttx/clock_notifier.h
  *
  * SPDX-License-Identifier: Apache-2.0
  *
@@ -20,62 +20,64 @@
  *
  ****************************************************************************/
 
+#ifndef __INCLUDE_NUTTX_CLOCK_NOTIFIER_H
+#define __INCLUDE_NUTTX_CLOCK_NOTIFIER_H
+
 /****************************************************************************
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
+#include <time.h>
 
-#include <assert.h>
-
-#include <nuttx/sched.h>
-#include <nuttx/clock.h>
-#include <nuttx/sched_note.h>
-
-#include "irq/irq.h"
-#include "sched/sched.h"
-
-#if defined(CONFIG_SCHED_RESUMESCHEDULER)
+#include <nuttx/notifier.h>
 
 /****************************************************************************
- * Public Functions
+ * Pre-processor Definitions
  ****************************************************************************/
 
 /****************************************************************************
- * Name: nxsched_resume_scheduler
+ * Public Function
+ ****************************************************************************/
+
+/****************************************************************************
+ * Name:  register_clock_notifier
  *
  * Description:
- *   Called by architecture specific implementations that block task
- *   execution.  This function prepares the scheduler for the thread that is
- *   about to be restarted.
+ *   Add notifier to the clock_notifier chain
  *
  * Input Parameters:
- *   tcb - The TCB of the thread to be restarted.
- *
- * Returned Value:
- *   None
+ *    nb - New entry in notifier chain
  *
  ****************************************************************************/
 
-void nxsched_resume_scheduler(FAR struct tcb_s *tcb)
-{
-#ifdef CONFIG_SCHED_SPORADIC
-  if ((tcb->flags & TCB_FLAG_POLICY_MASK) == TCB_FLAG_SCHED_SPORADIC)
-    {
-      /* Reset the replenishment cycle if it is appropriate to do so */
+void register_clock_notifier(FAR struct notifier_block *nb);
 
-      DEBUGVERIFY(nxsched_resume_sporadic(tcb));
-    }
-#endif
+/****************************************************************************
+ * Name:  unregister_clock_notifier
+ *
+ * Description:
+ *   Remove notifier from the clock_notifier chain
+ *
+ * Input Parameters:
+ *    nb - Entry to remove from notifier chain
+ *
+ ****************************************************************************/
 
-  /* Indicate the task has been resumed */
+void unregister_clock_notifier(FAR struct notifier_block *nb);
 
-#ifdef CONFIG_SCHED_CRITMONITOR
-  nxsched_resume_critmon(tcb);
-#endif
-#ifdef CONFIG_SCHED_INSTRUMENTATION
-  sched_note_resume(tcb);
-#endif
-}
+/****************************************************************************
+ * Name:  clock_notifier_call_chain
+ *
+ * Description:
+ *   Call functions in the clock_notifier chain.
+ *
+ * Input Parameters:
+ *    action - Value passed unmodified to notifier function
+ *    tp - Pointer of current timespec passed unmodified to notifier function
+ *
+ ****************************************************************************/
 
-#endif /* CONFIG_SCHED_RESUMESCHEDULER */
+void clock_notifier_call_chain(unsigned long action,
+                               FAR const struct timespec *tp);
+
+#endif /* __INCLUDE_NUTTX_CLOCK_NOTIFIER_H */

@@ -89,6 +89,7 @@ struct noteram_driver_s
   FAR uint8_t *ni_buffer;
   size_t ni_bufsize;
   unsigned int ni_overwrite;
+  unsigned int threshold;
   volatile unsigned int ni_head;
   volatile unsigned int ni_tail;
   volatile unsigned int ni_read;
@@ -447,6 +448,8 @@ static int noteram_open(FAR struct file *filep)
       return -ENOMEM;
     }
 
+  drv->threshold = sizeof(struct note_common_s);
+
   filep->f_priv = ctx;
   noteram_dump_init_context(ctx);
   return OK;
@@ -616,6 +619,11 @@ static int noteram_ioctl(FAR struct file *filep, int cmd, unsigned long arg)
           }
         break;
 
+      case PIPEIOC_POLLINTHRD:
+        drv->threshold = (uint32_t)arg;
+        ret = OK;
+        break;
+
       default:
           break;
     }
@@ -673,7 +681,7 @@ static int noteram_poll(FAR struct file *filep, FAR struct pollfd *fds,
        * don't wait for RX.
        */
 
-      if (noteram_unread_length(drv) > 0)
+      if (noteram_unread_length(drv) >= drv->threshold)
         {
           spin_unlock_irqrestore_notrace(&drv->lock, flags);
           poll_notify(&drv->pfd, 1, POLLIN);
@@ -758,7 +766,11 @@ static void noteram_add(FAR struct note_driver_s *driver,
   memcpy(drv->ni_buffer, buf + space, notelen - space);
   drv->ni_head = noteram_next(drv, head, NOTE_ALIGN(notelen));
   spin_unlock_irqrestore_notrace(&drv->lock, flags);
-  poll_notify(&drv->pfd, 1, POLLIN);
+
+  if (drv->pfd && (noteram_unread_length(drv) >= drv->threshold))
+    {
+      poll_notify(&drv->pfd, 1, POLLIN);
+    }
 }
 
 /****************************************************************************
@@ -1200,11 +1212,30 @@ static int noteram_dump_one(FAR uint8_t *p, FAR struct lib_outstream_s *s,
       break;
     case NOTE_DUMP_MARK:
       {
-        int len = note->nc_length - sizeof(struct note_event_s);
         FAR struct note_event_s *nbi = (FAR struct note_event_s *)p;
+        int len = note->nc_length - SIZEOF_NOTE_EVENT(0);
+
         ret += noteram_dump_header(s, &nbi->nev_cmn, ctx);
         ret += lib_sprintf(s, "tracing_mark_write: I|%d|%.*s\n",
                            pid, len, (FAR const char *)nbi->nev_data);
+      }
+      break;
+      case NOTE_DUMP_BINARY:
+      {
+        FAR struct note_event_s *nbi = (FAR struct note_event_s *)p;
+        int len = note->nc_length - SIZEOF_NOTE_EVENT(0);
+        int i;
+
+        ret += noteram_dump_header(s, &nbi->nev_cmn, ctx);
+        ret += lib_sprintf(s, "tracing_mark_write: I|%d|", pid);
+
+        for (i = 0; i < len; i++)
+          {
+            ret += lib_sprintf(s, "%02x ", nbi->nev_data[i]);
+          }
+
+        lib_stream_putc(s, '\n');
+        ret++;
       }
       break;
     case NOTE_DUMP_COUNTER:

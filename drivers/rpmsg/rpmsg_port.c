@@ -24,6 +24,8 @@
  * Included Files
  ****************************************************************************/
 
+#include <debug.h>
+#include <execinfo.h>
 #include <stdio.h>
 
 #include <nuttx/irq.h>
@@ -37,6 +39,8 @@
 /****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
+
+#define RPMSG_PORT_TIMEOUT_MS       15000
 
 #define RPMSG_PORT_BUF_TO_NODE(q,b) ((q)->node + ((FAR void *)(b) - (q)->buf) / (q)->len)
 #define RPMSG_PORT_NODE_TO_BUF(q,n) ((q)->buf + (((n) - (q)->node)) * (q)->len)
@@ -215,6 +219,8 @@ rpmsg_port_create_queues(FAR struct rpmsg_port_s *port,
       return ret;
     }
 
+  port->txq.port = port;
+  port->rxq.port = port;
   return 0;
 }
 
@@ -400,7 +406,7 @@ static void rpmsg_port_rx_callback(FAR struct rpmsg_port_s *port,
   FAR struct rpmsg_hdr *rphdr = (FAR struct rpmsg_hdr *)hdr->buf;
   FAR void *data = RPMSG_LOCATE_DATA(rphdr);
   FAR struct rpmsg_endpoint *ept;
-  int status;
+  int status = 0;
 
   metal_mutex_acquire(&rdev->lock);
   ept = rpmsg_get_ept_from_addr(rdev, rphdr->dst);
@@ -416,13 +422,17 @@ static void rpmsg_port_rx_callback(FAR struct rpmsg_port_s *port,
         }
 
       status = ept->cb(ept, data, rphdr->len, rphdr->src, ept->priv);
-      if (status < 0)
+      if (status < 0 && status != RPMSG_SUCCESS_BUFFER_RELEASED)
         {
           RPMSG_ASSERT(0, "unexpected callback status\n");
         }
     }
 
-  rpmsg_port_release_rx_buffer(rdev, data);
+  if (status != RPMSG_SUCCESS_BUFFER_RELEASED)
+    {
+      rpmsg_port_release_rx_buffer(rdev, data);
+    }
+
   metal_mutex_acquire(&rdev->lock);
   rpmsg_ept_decref(ept);
   metal_mutex_release(&rdev->lock);
@@ -608,8 +618,10 @@ FAR struct rpmsg_port_header_s *
 rpmsg_port_queue_get_available_buffer(FAR struct rpmsg_port_queue_s *queue,
                                       bool wait)
 {
-  FAR struct list_node *node;
+  FAR struct rpmsg_port_s *port = queue->port;
   FAR struct rpmsg_port_header_s *hdr;
+  FAR struct list_node *node;
+  int ret;
 
   for (; ; )
     {
@@ -625,7 +637,19 @@ rpmsg_port_queue_get_available_buffer(FAR struct rpmsg_port_queue_s *queue,
           return NULL;
         }
 
-      nxsem_wait_uninterruptible(&queue->free.sem);
+      ret = port->ops->notify_queue_noavail ?
+            port->ops->notify_queue_noavail(port, queue) : -ENOTSUP;
+      if (ret == -ENOTSUP)
+        {
+          ret = nxsem_tickwait_uninterruptible(
+            &queue->free.sem, MSEC2TICK(RPMSG_PORT_TIMEOUT_MS));
+          if (ret == -ETIMEDOUT)
+            {
+              rpmsgerr("Get buffer timeout, Dump debug information:\n");
+              dump_stack();
+              rpmsg_port_dump(&port->rpmsg);
+            }
+        }
     }
 }
 
@@ -816,5 +840,10 @@ static void rpmsg_port_dump(FAR struct rpmsg_s *rpmsg)
   if (needunlock)
     {
       metal_mutex_release(&rdev->lock);
+    }
+
+  if (port->ops->dump)
+    {
+      port->ops->dump(port);
     }
 }
