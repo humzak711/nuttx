@@ -22,15 +22,16 @@
  * Included Files
  ****************************************************************************/
 
-#include <nuttx/config.h>
-
 #include <arch/kvm.h>
 
 #include <errno.h>
 #include <stdint.h>
 
 #include <nuttx/sched.h>
-#include "x86_internal.h"
+#include <unistd.h>
+#include "assert.h"
+#include "nuttx/compiler.h"
+#include "x86_64_internal.h"
 #include "intel64_cpu.h"
 #include "intel64_kvm.h"
 
@@ -38,18 +39,16 @@
  * Pre-processor Definitions
  ****************************************************************************/
 
-#define X86_KVM_APREEMPTIVE     (1 << 0)
-#define X86_KVM_PV_SPINLOCKS    (1 << 1)
-#define X86_KVM_PV_IPIS         (1 << 2)
-#define X86_KVM_PV_SCHED_YIELD  (1 << 3)
+#define INTEL64_KVM_APREEMPTIVE     (1 << 0)
+#define INTEL64_KVM_PV_SCHED_YIELD  (1 << 1)
 
 /****************************************************************************
  * Private Types
  ****************************************************************************/
 
-struct kvm_s 
+struct intel64_kvm_priv_s 
 {
-  bool kvm_active;
+  uint32_t spin_count;
   uint8_t kvm_features;
 };
 
@@ -57,8 +56,7 @@ struct kvm_s
  * Private Data
  ****************************************************************************/
 
-static struct kvm_s g_kvm_priv[CONFIG_SMP_NCPUS];
-static bool g_kvm_pv_enabled;
+static struct intel64_kvm_priv_s g_kvm_priv[CONFIG_SMP_NCPUS];
 
 /****************************************************************************
  * Public Functions
@@ -74,52 +72,59 @@ void x86_64_kvm_priv_init(void)
   uint32_t ebx;
   uint32_t ecx;
   uint32_t edx;
-  int kvm_apreemptive_en;
-  int kvm_pv_spinlocks_en;
-  int kvm_pv_ipis_en;
-  int kvm_pv_sched_yield_en;
-  struct kvm_s *g_kvm;
+  struct intel64_kvm_priv_s *priv;
 
   x86_64_cpuid(X86_64_KVM_CPUID_SIGNATURE, 0, &max, &sig_b, &sig_c, &sig_d);
 
   if (sig_b != X86_64_KVM_SIGNATURE_B || sig_c != X86_64_KVM_SIGNATURE_C ||
       sig_d != X86_64_KVM_SIGNATURE_D || max < X86_64_KVM_CPUID_FEATURES)
     {
-      return;    
+      return;
     }
 
   x86_64_cpuid(X86_64_KVM_CPUID_FEATURES, 0, &eax, &ebx, &ecx, &edx);
 
-  kvm_apreemptive_en = edx & X86_64_KVM_HINTS_REALTIME;
-  kvm_pv_spinlocks_en = eax & X86_64_KVM_FEATURE_PV_UNHALT;
-  kvm_pv_ipis_en = eax & X86_64_KVM_FEATURE_PV_SEND_IPI;
-  kvm_pv_sched_yield_en = eax & X86_64_KVM_FEATURE_PV_SCHED_YIELD;
+  UNUSED(ebx);
+  UNUSED(ecx);
 
-  g_kvm = &g_kvm_priv[this_cpu()];
+  priv = &g_kvm_priv[this_cpu()];
 
-  g_kvm->kvm_active = true;
-
-  g_kvm->kvm_features |= (kvm_apreemptive_en << X86_KVM_APREEMPTIVE);
-  g_kvm->kvm_features |= (kvm_pv_spinlocks_en << X86_KVM_PV_SPINLOCKS);
-  g_kvm->kvm_features |= (kvm_pv_ipis_en << X86_KVM_PV_IPIS);
-  g_kvm->kvm_features |= (kvm_pv_sched_yield_en << X86_KVM_PV_SCHED_YIELD);
-}
-
-int x86_64_kvm_sched_yield(void)
-{
-  struct kvm_s *g_kvm; 
-  uint8_t features;
-
-  g_kvm = &g_kvm_priv[this_cpu()];
-  features = g_kvm->kvm_features;
-
-  if ((features & X86_KVM_APREEMPTIVE) != 0 || 
-      (features & X86_KVM_PV_SCHED_YIELD) != 0)
+  if ((edx & X86_64_KVM_HINTS_REALTIME) != 0)
     {
-      return -EOPNOTSUPP;
+      priv->kvm_features |= INTEL64_KVM_APREEMPTIVE;
     }
 
-  kvm_hypercall0(X86_64_KVM_HC_SCHED_YIELD);
-
-  return 0;
+  if ((eax & X86_64_KVM_FEATURE_PV_SCHED_YIELD) != 0)
+    {
+      priv->kvm_features |= INTEL64_KVM_PV_SCHED_YIELD;
+    }
 }
+
+#ifdef CONFIG_ARCH_INTEL64_KVM_PV_SPINLOCKS
+
+void x86_64_kvm_pv_spin_wait(void)
+{
+  struct intel64_kvm_priv_s *priv; 
+  uint8_t features;
+
+  priv = &g_kvm_priv[this_cpu()];
+  features = priv->kvm_features;
+
+  if ((features & INTEL64_KVM_APREEMPTIVE) != 0 || 
+      (features & INTEL64_KVM_PV_SCHED_YIELD) == 0)
+    {
+      __asm__ volatile ("pause");
+    }
+  else if (priv->spin_count < CONFIG_ARCH_INTEL64_KVM_PV_SPIN_THRESHOLD)
+    {
+      priv->spin_count++;
+      __asm__ volatile ("pause");
+    }
+  else
+    {
+      kvm_hypercall0(X86_64_KVM_HC_SCHED_YIELD);
+      priv->spin_count = 0;
+    }
+}
+
+#endif

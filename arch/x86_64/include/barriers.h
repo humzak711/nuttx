@@ -22,6 +22,12 @@
 #define __ARCH_X86_64_INCLUDE_BARRIERS_H
 
 /****************************************************************************
+ * Included Files
+ ****************************************************************************/
+
+#include <nuttx/config.h>
+
+/****************************************************************************
  * Pre-processor Definitions
  ****************************************************************************/
 
@@ -29,6 +35,11 @@
 #define UP_DMB() __asm__ __volatile__ ("mfence" ::: "memory")
 #define UP_RMB() __asm__ __volatile__ ("lfence" ::: "memory")
 #define UP_WMB() __asm__ __volatile__ ("sfence" ::: "memory")
-#define UP_WFE() __asm__ __volatile__ ("pause")
+
+#ifdef CONFIG_ARCH_INTEL64_KVM_PV_SPINLOCKS
+#  define UP_WFE() x86_64_kvm_pv_spin_wait()
+#else
+#  define UP_WFE() __asm__ __volatile__ ("pause")
+#endif
 
 #endif /* __ARCH_X86_64_INCLUDE_BARRIERS_H */

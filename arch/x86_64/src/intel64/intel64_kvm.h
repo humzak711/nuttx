@@ -26,13 +26,18 @@
  * Included Files
  ****************************************************************************/
 
-#include <stdint.h>
-#include <sched/sched.h>
+#include <nuttx/config.h>
 
 /****************************************************************************
 * Public Function Prototypes
 ****************************************************************************/
 
 void x86_64_kvm_priv_init(void);
+
+#ifdef CONFIG_ARCH_INTEL64_KVM_PV_SPINLOCKS
+
+void x86_64_kvm_pv_spin_wait(void);
+
+#endif
 
 #endif /* __ARCH_X86_64_SRC_INTEL64_INTEL64_KVM_H */

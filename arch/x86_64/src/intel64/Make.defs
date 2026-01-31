@@ -104,6 +104,6 @@ ifeq ($(CONFIG_ARCH_FPU),y)
 CHIP_CSRCS += intel64_fpucmp.c
 endif
 
-ifeq ($(CONFIG_ARCH_INTEL64_KVM_PARAVIRT), y)
+ifeq ($(CONFIG_ARCH_INTEL64_KVM_GUEST), y)
 CHIP_CSRCS += intel64_kvm.c
 endif

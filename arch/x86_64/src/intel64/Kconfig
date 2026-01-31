@@ -16,10 +16,12 @@ config ARCH_INTEL64_HAS_TSC_ADJUST
 	---help---
 		MSR_IA32_TSC_ADJUST is used to adjust the offset of the Time Stamp Counter (TSC).
 
-config ARCH_INTEL64_KVM_PARAVIRT
+config ARCH_INTEL64_KVM_GUEST
 	bool "KVM paravirtualization support"
-	depends on ARCH_PARAVIRT
-	select ARCH_PARAVIRT_SPINLOCKS
+	default n
+	---help---
+		Select to enable optimizations when running in a virtualized environment
+		provided by KVM.
 
 config ARCH_INTEL64_CACHE_LINESIZE
 	int "Cache line size (hardcoded)"
@@ -81,6 +83,25 @@ config ARCH_INTEL64_HPET_ALARM
 		provide the system clock.
 
 endchoice # System Timer Source
+
+if ARCH_INTEL64_KVM_GUEST
+
+config ARCH_INTEL64_KVM_PV_SPINLOCKS
+	bool "Paravirtualized spinlocks"
+	default y
+	---help---
+		Enable paravirtualized spinlock support to reduce CPU overhead by yielding the 
+		VCPU when a spinlock is contended.
+
+config ARCH_INTEL64_KVM_PV_SPIN_THRESHOLD
+	int "PV spinlock threshold"
+	default 50
+	depends on ARCH_INTEL64_KVM_PV_SPINLOCKS
+	---help---
+		Number of iterations to spin before issuing a hypercall to the KVM host to yield
+		the processor.
+
+endif # ARCH_INTEL64_KVM_GUEST
 
 if ARCH_INTEL64_TSC_DEADLINE
 
