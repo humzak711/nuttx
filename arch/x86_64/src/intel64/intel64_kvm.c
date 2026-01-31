@@ -28,9 +28,11 @@
 #include <stdint.h>
 
 #include <nuttx/sched.h>
+#include <nuttx/arch.h>
+#include <nuttx/compiler.h>
+
 #include <unistd.h>
-#include "assert.h"
-#include "nuttx/compiler.h"
+#include <assert.h>
 #include "x86_64_internal.h"
 #include "intel64_cpu.h"
 #include "intel64_kvm.h"

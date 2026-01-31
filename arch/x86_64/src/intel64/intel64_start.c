@@ -35,6 +35,7 @@
 
 #include <debug.h>
 
+#include "intel64_kvm.h"
 #include "x86_64_internal.h"
 
 #include "intel64_lowsetup.h"
@@ -220,6 +221,12 @@ void __nxstart(void)
   /* Store CPU IDs */
 
   x86_64_cpu_priv_set(0);
+
+#ifdef CONFIG_ARCH_INTEL64_KVM_GUEST
+  /* Initialize KVM paravirtualization data */
+
+  x86_64_kvm_priv_init();
+#endif
 
   /* Start NuttX */
 

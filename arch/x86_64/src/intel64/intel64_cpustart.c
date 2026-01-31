@@ -35,9 +35,11 @@
 #include <nuttx/spinlock.h>
 #include <nuttx/tls.h>
 
+#include "intel64_kvm.h"
 #include "sched/sched.h"
 #include "init/init.h"
 
+#include "syslog.h"
 #include "x86_64_internal.h"
 
 #include "intel64_lowsetup.h"
@@ -152,6 +154,12 @@ void x86_64_ap_boot(void)
   /* Store CPU private data */
 
   x86_64_cpu_priv_set(cpu);
+
+#ifdef CONFIG_ARCH_INTEL64_KVM_GUEST
+  /* Initialize KVM paravirtualization data */
+
+  x86_64_kvm_priv_init();
+#endif
 
   tcb = current_task(cpu);
   UNUSED(tcb);
