@@ -37,7 +37,13 @@
 #define UP_WMB() __asm__ __volatile__ ("sfence" ::: "memory")
 
 #ifdef CONFIG_ARCH_INTEL64_KVM_PV_SPINLOCKS
+
+#  ifndef __ASSEMBLY__
+extern void x86_64_kvm_pv_spin_wait(void);
+#  endif
+
 #  define UP_WFE() x86_64_kvm_pv_spin_wait()
+
 #else
 #  define UP_WFE() __asm__ __volatile__ ("pause")
 #endif
